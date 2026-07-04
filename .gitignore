@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build output
+dist/
+build/
+*/dist/
+*/build/
+
+# Environment files (DB credentials, JWT secret)
+.env
+.env.local
+.env.*.local
+*/.env
+*/.env.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test / Coverage
+coverage/
+.nyc_output/
+
+# Cache
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+.tsbuildinfo
+*/.tsbuildinfo
+
+# Local uploads / runtime
+uploads/
+*/uploads/
+backend/uploads/
+
+# OCR training data (large files)
+backend/eng.traineddata
+backend/tur.traineddata
+
+# Misc
+*.local

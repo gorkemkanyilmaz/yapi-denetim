@@ -180,6 +180,9 @@ CREATE TABLE sample_sets (
   concrete_temp_c       DECIMAL(4, 1),
   air_temp_c            DECIMAL(4, 1),
   status                sample_status NOT NULL DEFAULT 'created',
+  assigned_to           UUID REFERENCES users(id) ON DELETE SET NULL,
+  is_accepted           BOOLEAN NOT NULL DEFAULT FALSE,
+  accepted_at           TIMESTAMPTZ,
   collected_by          UUID REFERENCES users(id),
   collected_at          TIMESTAMPTZ,
   gps_lat               DECIMAL(10, 7),
@@ -191,6 +194,7 @@ CREATE TABLE sample_sets (
   curing_pool_zone_id   UUID,
   curing_started_at     TIMESTAMPTZ,
   curing_ended_at       TIMESTAMPTZ,
+  unit_price_try        DECIMAL(12, 2) NOT NULL DEFAULT 0 CHECK (unit_price_try >= 0),
   notes                 TEXT,
   sla_alert             sla_alert_level NOT NULL DEFAULT 'normal',
   geofence_override     BOOLEAN NOT NULL DEFAULT FALSE,
@@ -208,6 +212,30 @@ CREATE INDEX idx_sample_sets_collected_at ON sample_sets(collected_at) WHERE col
 CREATE INDEX idx_sample_sets_material_type ON sample_sets(material_type);
 CREATE INDEX idx_sample_sets_created_at ON sample_sets(created_at DESC);
 CREATE INDEX idx_sample_sets_sla_alert ON sample_sets(sla_alert) WHERE sla_alert != 'normal';
+CREATE INDEX idx_sample_sets_assigned_to ON sample_sets(assigned_to) WHERE assigned_to IS NOT NULL;
+
+-- ============================================================================
+-- BYPASS REQUESTS (Şantiye Dışı Giriş Onay Talepleri)
+-- ============================================================================
+CREATE TABLE bypass_requests (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id     UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  sample_set_id UUID NOT NULL REFERENCES sample_sets(id) ON DELETE CASCADE,
+  requested_by  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  distance_m    INTEGER NOT NULL CHECK (distance_m >= 0),
+  threshold_m   INTEGER NOT NULL CHECK (threshold_m > 0),
+  token         VARCHAR(50) NOT NULL,
+  status        VARCHAR(20) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'approved', 'rejected')),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_bypass_token UNIQUE (token),
+  CONSTRAINT uq_bypass_pending_per_sample UNIQUE (sample_set_id)
+);
+
+CREATE INDEX idx_bypass_tenant ON bypass_requests(tenant_id);
+CREATE INDEX idx_bypass_status ON bypass_requests(status) WHERE status = 'pending';
+CREATE INDEX idx_bypass_sample ON bypass_requests(sample_set_id);
 
 -- ============================================================================
 -- SPECIMENS (NUMUNELER)

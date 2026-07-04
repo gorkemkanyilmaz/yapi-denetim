@@ -1,6 +1,6 @@
 import winston from 'winston'
 
-const { combine, timestamp, errors, json, colorize, simple, printf } = winston.format
+const { combine, timestamp, errors, json, colorize, printf } = winston.format
 
 const safeErr = (err: unknown) => {
   if (err instanceof Error) {

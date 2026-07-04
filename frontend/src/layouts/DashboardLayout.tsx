@@ -65,6 +65,27 @@ export function DashboardLayout() {
         ))}
       </nav>
       <div className="p-3 border-t border-slate-800">
+        {user?.role === 'owner' && tenant?.expires_at && (() => {
+          const daysLeft = Math.ceil(
+            (new Date(tenant.expires_at).getTime() - Date.now()) / 86_400_000,
+          )
+          const isUrgent = daysLeft <= 30
+          const isExpired = daysLeft <= 0
+          return (
+            <div className={`mb-2 px-2.5 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-between gap-2 ${
+              isExpired
+                ? 'bg-red-900/40 text-red-300 border border-red-800/50'
+                : isUrgent
+                ? 'bg-amber-900/40 text-amber-300 border border-amber-800/50'
+                : 'bg-slate-800/60 text-slate-400 border border-slate-700/50'
+            }`}>
+              <span>Uygulama Bitiş</span>
+              <span className="font-mono">
+                {isExpired ? 'Süre Doldu' : `${daysLeft} gün`}
+              </span>
+            </div>
+          )
+        })()}
         <div className="flex items-center gap-2 px-2 py-1 text-sm text-slate-300">
           <User className="w-4 h-4 shrink-0" />
           <span className="truncate flex-1 min-w-0">{user?.full_name}</span>

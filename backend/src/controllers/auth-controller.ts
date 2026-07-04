@@ -17,9 +17,11 @@ export async function login(req: Request, res: Response): Promise<void> {
   const r = await pool.query<{
     id: string; tenant_id: string; password_hash: string; full_name: string;
     role: string; is_active: boolean; email: string; tenant_name: string; tenant_slug: string;
+    tenant_is_active: boolean; tenant_expires_at: string | null;
   }>(
     `SELECT u.id, u.tenant_id, u.password_hash, u.full_name, u.role, u.is_active, u.email,
-            t.name AS tenant_name, t.slug AS tenant_slug
+            t.name AS tenant_name, t.slug AS tenant_slug,
+            t.is_active AS tenant_is_active, t.expires_at AS tenant_expires_at
        FROM users u
        JOIN tenants t ON t.id = u.tenant_id
       WHERE u.email = $1 ${tenantFilter}
@@ -29,6 +31,19 @@ export async function login(req: Request, res: Response): Promise<void> {
   const user = r.rows[0]
   if (!user || !user.is_active) {
     res.status(401).json({ success: false, message: 'Geçersiz kimlik bilgileri' })
+    return
+  }
+  if (user.tenant_is_active === false) {
+    res.status(403).json({ success: false, code: 'TENANT_DISABLED', message: 'Firma hesabı devre dışı bırakılmıştır' })
+    return
+  }
+  if (user.tenant_expires_at && new Date(user.tenant_expires_at) < new Date()) {
+    res.status(403).json({
+      success: false,
+      code: 'TENANT_EXPIRED',
+      message: 'Firma kullanım süresi dolmuştur. Yönetici ile iletişime geçin.',
+      expiresAt: user.tenant_expires_at,
+    })
     return
   }
   const ok = await bcrypt.compare(password, user.password_hash)
@@ -51,7 +66,12 @@ export async function login(req: Request, res: Response): Promise<void> {
         id: user.id, email: user.email, full_name: user.full_name,
         role: user.role, tenant_id: user.tenant_id,
       },
-      tenant: { id: user.tenant_id, name: user.tenant_name, slug: user.tenant_slug },
+      tenant: {
+        id: user.tenant_id,
+        name: user.tenant_name,
+        slug: user.tenant_slug,
+        expires_at: user.tenant_expires_at,
+      },
     },
   })
 }
@@ -101,13 +121,30 @@ export async function me(req: Request, res: Response): Promise<void> {
   }
   const r = await pool.query(
     `SELECT u.id, u.email, u.full_name, u.role, u.phone, u.avatar_url, u.tenant_id,
-            t.name AS tenant_name, t.slug AS tenant_slug, t.logo_url
+            t.name AS tenant_name, t.slug AS tenant_slug, t.logo_url, t.expires_at AS tenant_expires_at
        FROM users u
        JOIN tenants t ON t.id = u.tenant_id
       WHERE u.id = $1`,
     [req.user.userId],
   )
-  res.json({ success: true, data: r.rows[0] ?? null })
+  const row = r.rows[0]
+  if (!row) {
+    res.json({ success: true, data: null })
+    return
+  }
+  res.json({
+    success: true,
+    data: {
+      ...row,
+      tenant: {
+        id: row.tenant_id,
+        name: row.tenant_name,
+        slug: row.tenant_slug,
+        logo_url: row.logo_url,
+        expires_at: row.tenant_expires_at,
+      },
+    },
+  })
 }
 
 export async function listUsers(req: Request, res: Response): Promise<void> {

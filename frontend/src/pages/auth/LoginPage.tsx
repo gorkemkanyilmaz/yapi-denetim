@@ -36,7 +36,7 @@ export function LoginPage() {
           <p className="text-sm text-slate-500">Ankara Operasyon Paneli</p>
         </div>
         <div>
-          <label className="text-xs font-medium text-slate-600">Tenant</label>
+          <label className="text-xs font-medium text-slate-600">Firma</label>
           <input value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)} className="w-full rounded-md border-slate-300 p-2 mt-1" />
         </div>
         <div>

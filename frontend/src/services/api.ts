@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { toast } from 'sonner'
 
 const baseURL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '')
 
@@ -19,8 +20,32 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const status = err.response?.status
+    const code = err.response?.data?.code
+
+    if (status === 403 && code === 'TENANT_EXPIRED') {
+      toast.error('Firma kullanım süresi dolmuştur. Yönetici ile iletişime geçin.')
       localStorage.removeItem('auth_token')
+      localStorage.removeItem('tenant_id')
+      localStorage.removeItem('auth_user')
+      localStorage.removeItem('auth_tenant')
+      window.location.href = '/login'
+      return Promise.reject(err)
+    }
+    if (status === 403 && code === 'TENANT_DISABLED') {
+      toast.error('Firma hesabı devre dışı bırakılmıştır.')
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('tenant_id')
+      localStorage.removeItem('auth_user')
+      localStorage.removeItem('auth_tenant')
+      window.location.href = '/login'
+      return Promise.reject(err)
+    }
+    if (status === 401) {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('tenant_id')
+      localStorage.removeItem('auth_user')
+      localStorage.removeItem('auth_tenant')
       window.location.href = '/login'
     }
     return Promise.reject(err)

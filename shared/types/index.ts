@@ -5,6 +5,7 @@ export interface Tenant {
   name: string
   slug: string
   logo_url: string | null
+  expires_at: string | null
   created_at: string
 }
 

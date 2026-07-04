@@ -155,7 +155,7 @@ export async function createSampleSet(req: Request, res: Response): Promise<void
     res.status(201).json({ success: true, data: { id: setId } })
   } catch (err) {
     await client.query('ROLLBACK')
-    logger.error('createSampleSet failed', { err })
+    logger.error('createSampleSet failed', { err: err instanceof Error ? { message: err.message, code: (err as Error & { code?: string }).code, detail: (err as Error & { detail?: string }).detail, constraint: (err as Error & { constraint?: string }).constraint } : err, body: { constructionSiteId: body.constructionSiteId, materialType: body.materialType, yifNo: body.yifNo, tenantId: req.tenantId } })
     res.status(500).json({ success: false, message: 'Oluşturulamadı' })
   } finally {
     client.release()

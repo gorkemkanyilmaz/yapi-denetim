@@ -1,0 +1,18 @@
+[Unit]
+Description=Yapi Denetim Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/yapi-denetim/backend
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=yapi-denetim-backend
+EnvironmentFile=/home/ubuntu/yapi-denetim/backend/.env
+
+[Install]
+WantedBy=multi-user.target

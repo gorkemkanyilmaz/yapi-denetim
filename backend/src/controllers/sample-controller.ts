@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express'
+import crypto from 'node:crypto'
 import { pool } from '@/config/database.js'
 import { SampleStatus, MaterialType, StakeholderRole } from '@shared/types/enums'
 import {

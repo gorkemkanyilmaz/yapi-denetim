@@ -96,6 +96,7 @@ CREATE TABLE tenants (
   address       TEXT,
   tax_no        VARCHAR(20),
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  expires_at    DATE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

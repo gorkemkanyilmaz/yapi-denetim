@@ -35,8 +35,21 @@ export const curingPoolsApi = {
 }
 
 export const hakedisApi = {
-  list: () => api.get('/hakedis').then((r) => r.data),
-  create: (body: { constructionSiteId: string; periodStart: string; periodEnd: string; unitPriceTry: number; vatRate?: number }) =>
+  list: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams()
+    if (startDate) params.set('startDate', startDate)
+    if (endDate) params.set('endDate', endDate)
+    const qs = params.toString()
+    return api.get(`/hakedis${qs ? '?' + qs : ''}`).then((r) => r.data)
+  },
+  summary: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams()
+    if (startDate) params.set('startDate', startDate)
+    if (endDate) params.set('endDate', endDate)
+    const qs = params.toString()
+    return api.get(`/hakedis/summary${qs ? '?' + qs : ''}`).then((r) => r.data)
+  },
+  create: (body: any) =>
     api.post('/hakedis', body).then((r) => r.data),
   updateStatus: (id: string, body: { status: string; invoiceNo?: string }) =>
     api.patch(`/hakedis/${id}/status`, body).then((r) => r.data),

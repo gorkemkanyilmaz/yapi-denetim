@@ -179,6 +179,18 @@ export async function createSampleSet(req: Request, res: Response): Promise<void
         )
       }
     }
+
+    // Otomatik hakediş oluştur (unit_price_try > 0 ise)
+    if (body.unitPriceTry && body.unitPriceTry > 0) {
+      const today = new Date().toISOString().slice(0, 10)
+      await client.query(
+        `INSERT INTO hakedis
+           (tenant_id, construction_site_id, period_start, period_end, total_samples, completed_samples,
+            unit_price_try, amount_try, vat_rate, vat_amount_try, total_amount_try, status)
+         VALUES ($1, $2, $3, $4, 1, 0, $5, 0, 20, 0, 0, 'draft')`,
+        [req.tenantId, body.constructionSiteId, today, today, body.unitPriceTry],
+      )
+    }
     await client.query('COMMIT')
     res.status(201).json({ success: true, data: { id: setId } })
   } catch (err) {

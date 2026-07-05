@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { dashboardApi } from '@/services/domain-api'
 import { samplesApi } from '@/services/samples-api'
 import { toast } from 'sonner'
-import { AlertTriangle, TrendingUp, Wallet, FlaskConical, MapPin } from 'lucide-react'
+import { AlertTriangle, Wallet, FlaskConical, MapPin } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { formatCurrency, formatDate, statusLabel } from '@/utils/utils'
@@ -41,7 +41,6 @@ export function DashboardHome() {
     }
   })
 
-  const s = stats?.data?.samples
   const f = stats?.data?.financial
   const sl = stats?.data?.sla
   const moldCritical = Number(sl?.mold_critical ?? 0)
@@ -72,18 +71,12 @@ export function DashboardHome() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <StatCard icon={<FlaskConical className="w-4 h-4 md:w-5 md:h-5" />} title="Bekleyen Toplama" value={s?.pending_collection ?? 0} color="blue" />
-        <StatCard icon={<MapPin className="w-4 h-4 md:w-5 md:h-5" />} title="Transferde" value={s?.in_transit ?? 0} color="indigo" />
-        <StatCard icon={<TrendingUp className="w-4 h-4 md:w-5 md:h-5" />} title="Kürde" value={s?.in_curing ?? 0} color="cyan" />
-        <StatCard icon={<AlertTriangle className="w-4 h-4 md:w-5 md:h-5" />} title="Kritik SLA" value={totalCritical} color="red" />
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
         <StatCard icon={<FlaskConical className="w-4 h-4 md:w-5 md:h-5" />} title="Bugün Toplanan" value={stats?.data?.periodicStats?.dailyCollected ?? 0} color="blue" />
         <StatCard icon={<FlaskConical className="w-4 h-4 md:w-5 md:h-5" />} title="Bu Ay Toplanan" value={stats?.data?.periodicStats?.monthlyCollected ?? 0} color="indigo" />
         <StatCard icon={<FlaskConical className="w-4 h-4 md:w-5 md:h-5" />} title="Bugün Kırılan" value={stats?.data?.periodicStats?.dailyCrushed ?? 0} color="cyan" />
         <StatCard icon={<FlaskConical className="w-4 h-4 md:w-5 md:h-5" />} title="Bu Ay Kırılan" value={stats?.data?.periodicStats?.monthlyCrushed ?? 0} color="indigo" />
+        <StatCard icon={<AlertTriangle className="w-4 h-4 md:w-5 md:h-5" />} title="Kritik SLA" value={totalCritical} color="red" />
       </div>
 
       <div className="bg-white rounded-xl p-4 md:p-5 border border-slate-200">

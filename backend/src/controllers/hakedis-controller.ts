@@ -36,15 +36,45 @@ export async function listHakedis(req: Request, res: Response): Promise<void> {
     res.status(403).json({ success: false, message: 'Bu listeyi görme yetkiniz yok' })
     return
   }
+  const { startDate, endDate } = req.query as { startDate?: string; endDate?: string }
+  const where = ['h.tenant_id = $1']
+  const params: unknown[] = [req.tenantId]
+  if (startDate) { params.push(startDate); where.push(`h.period_start >= $${params.length}`) }
+  if (endDate) { params.push(endDate); where.push(`h.period_end <= $${params.length}`) }
   const r = await pool.query(
     `SELECT h.*, cs.name AS construction_site_name, cs.yif_no
        FROM hakedis h
        JOIN construction_sites cs ON cs.id = h.construction_site_id
-      WHERE h.tenant_id = $1
+      WHERE ${where.join(' AND ')}
       ORDER BY h.period_end DESC`,
-    [req.tenantId],
+    params,
   )
   res.json({ success: true, data: r.rows })
+}
+
+export async function hakedisSummary(req: Request, res: Response): Promise<void> {
+  if (!req.tenantId) { res.status(400).json({ success: false }); return }
+  if (req.user?.role !== UserRole.OWNER && req.user?.role !== UserRole.MANAGER && req.user?.role !== UserRole.ADMIN) {
+    res.status(403).json({ success: false, message: 'Bu listeyi görme yetkiniz yok' })
+    return
+  }
+  const { startDate, endDate } = req.query as { startDate?: string; endDate?: string }
+  const where = ['h.tenant_id = $1']
+  const params: unknown[] = [req.tenantId]
+  if (startDate) { params.push(startDate); where.push(`h.period_start >= $${params.length}`) }
+  if (endDate) { params.push(endDate); where.push(`h.period_end <= $${params.length}`) }
+  const r = await pool.query<{ total_expected: string; total_realized: string; total_paid: string; count_expected: string; count_realized: string }>(
+    `SELECT
+       COALESCE(SUM(h.total_amount_try) FILTER (WHERE h.status IN ('draft','submitted','approved')), 0)::text AS total_expected,
+       COALESCE(SUM(h.total_amount_try) FILTER (WHERE h.status IN ('invoiced','paid')), 0)::text AS total_realized,
+       COALESCE(SUM(h.total_amount_try) FILTER (WHERE h.status = 'paid'), 0)::text AS total_paid,
+       COUNT(*) FILTER (WHERE h.status IN ('draft','submitted','approved'))::text AS count_expected,
+       COUNT(*) FILTER (WHERE h.status IN ('invoiced','paid'))::text AS count_realized
+     FROM hakedis h
+     WHERE ${where.join(' AND ')}`,
+    params,
+  )
+  res.json({ success: true, data: r.rows[0] })
 }
 
 export async function createHakedis(req: Request, res: Response): Promise<void> {

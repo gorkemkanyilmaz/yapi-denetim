@@ -15,8 +15,9 @@ export function formatDateTime(iso: string | null | undefined, locale = 'tr-TR')
   return new Date(iso).toLocaleString(locale)
 }
 
-export function formatCurrency(value: number | string, currency = 'TRY'): string {
-  const n = typeof value === 'string' ? Number(value) : value
+export function formatCurrency(value: number | string | undefined | null, currency = 'TRY'): string {
+  const n = typeof value === 'string' ? Number(value) : (value ?? 0)
+  if (Number.isNaN(n)) return '₺0,00'
   return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(n)
 }
 

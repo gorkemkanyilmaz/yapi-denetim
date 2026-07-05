@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { pool } from '@/config/database.js'
+import type { JwtPayload } from '@/middleware/auth.js'
 import { extractEbisReceipt } from '@/services/ocr/ocr-service.js'
 import { validateGeofence } from '@/services/geofence/geofence.js'
 import { logger } from '@/utils/logger.js'
@@ -7,7 +8,7 @@ import { transitionSampleSet } from '@/services/state-machine/state-machine.js'
 import { SampleStatus } from '@shared/types/enums'
 
 export async function createFieldCollection(req: Request, res: Response): Promise<void> {
-  if (!req.user || !req.tenantId) { res.status(401).json({ success: false }); return }
+  if (!(req.user as JwtPayload) || !req.tenantId) { res.status(401).json({ success: false }); return }
   const body = req.body as {
     sampleSetId: string
     gps: { lat: number; lng: number; accuracyM?: number }
@@ -35,7 +36,7 @@ export async function createFieldCollection(req: Request, res: Response): Promis
        (sample_set_id, collected_by, gps_lat, gps_lng, gps_accuracy_m, geofence_valid, photos, ocr_raw_text, sync_status)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [
-      body.sampleSetId, req.user.userId, body.gps.lat, body.gps.lng,
+      body.sampleSetId, (req.user as JwtPayload).userId, body.gps.lat, body.gps.lng,
       body.gps.accuracyM ?? null, geo.valid,
       JSON.stringify(body.photos ?? []), body.ocrText ?? null,
       geo.valid ? (body.syncStatus ?? 'synced') : 'failed',
@@ -76,7 +77,7 @@ export async function ocrReceipt(req: Request, res: Response): Promise<void> {
 }
 
 export async function bulkSync(req: Request, res: Response): Promise<void> {
-  if (!req.user || !req.tenantId) { res.status(401).json({ success: false }); return }
+  if (!(req.user as JwtPayload) || !req.tenantId) { res.status(401).json({ success: false }); return }
   const { operations } = req.body as { operations: Array<{ idempotencyKey: string; entityType: string; payload: Record<string, any> }> }
   if (!Array.isArray(operations)) { res.status(400).json({ success: false }); return }
   const results: Array<{ idempotencyKey: string; success: boolean; error?: string }> = []
@@ -113,7 +114,7 @@ export async function bulkSync(req: Request, res: Response): Promise<void> {
              (sample_set_id, collected_by, gps_lat, gps_lng, gps_accuracy_m, geofence_valid, photos, ocr_raw_text, sync_status)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [
-            sampleSetId, req.user.userId, gps.lat, gps.lng,
+            sampleSetId, (req.user as JwtPayload).userId, gps.lat, gps.lng,
             gps.accuracyM ?? null, geo.valid,
             JSON.stringify(photos ?? []), ocrText ?? null,
             'synced'
@@ -135,7 +136,7 @@ export async function bulkSync(req: Request, res: Response): Promise<void> {
           },
           {
             tenantId: req.tenantId,
-            userId: req.user.userId,
+            userId: (req.user as JwtPayload).userId,
             ipAddress: req.ip ?? '0.0.0.0',
             userAgent: req.headers['user-agent'] ?? 'offline-sync',
           }
@@ -145,7 +146,7 @@ export async function bulkSync(req: Request, res: Response): Promise<void> {
       await pool.query(
         `INSERT INTO sync_queue (tenant_id, user_id, operation, entity_type, payload, idempotency_key, status)
          VALUES ($1,$2,'create',$3,$4,$5,'synced')`,
-        [req.tenantId, req.user.userId, op.entityType, JSON.stringify(op.payload), op.idempotencyKey],
+        [req.tenantId, (req.user as JwtPayload).userId, op.entityType, JSON.stringify(op.payload), op.idempotencyKey],
       )
       results.push({ idempotencyKey: op.idempotencyKey, success: true })
     } catch (err: any) {
@@ -154,7 +155,7 @@ export async function bulkSync(req: Request, res: Response): Promise<void> {
         await pool.query(
           `INSERT INTO sync_queue (tenant_id, user_id, operation, entity_type, payload, idempotency_key, status, error_message)
            VALUES ($1,$2,'create',$3,$4,$5,'failed',$6)`,
-          [req.tenantId, req.user.userId, op.entityType, JSON.stringify(op.payload), op.idempotencyKey, err?.message || String(err)],
+          [req.tenantId, (req.user as JwtPayload).userId, op.entityType, JSON.stringify(op.payload), op.idempotencyKey, err?.message || String(err)],
         )
       } catch (innerErr) {
         logger.error('failed to record failed sync to queue', { innerErr })

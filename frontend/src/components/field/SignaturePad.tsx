@@ -8,11 +8,17 @@ const LABELS: Record<string, string> = {
   beton_tesisi_yetkilisi: 'Hazır Beton Tesisi Yetkilisi',
 }
 
-export function SignaturePadComponent({ role, onChange, initial }: { role: string; onChange: (svg: string) => void; initial?: string }) {
+export function SignaturePadComponent({ role, onChange, initial, name, tc, onNameChange, onTcChange }: {
+  role: string; onChange: (svg: string) => void; initial?: string;
+  name?: string; tc?: string; onNameChange?: (v: string) => void; onTcChange?: (v: string) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const padRef = useRef<SignaturePad | null>(null)
-  const [name, setName] = useState('')
-  const [tc, setTc] = useState('')
+  const [localName, setLocalName] = useState('')
+  const [localTc, setLocalTc] = useState('')
+
+  const effectiveName = name ?? localName
+  const effectiveTc = tc ?? localTc
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -48,14 +54,14 @@ export function SignaturePadComponent({ role, onChange, initial }: { role: strin
       <div className="text-sm font-semibold text-slate-900">{LABELS[role] ?? role}</div>
       <div className="grid grid-cols-2 gap-2">
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={effectiveName}
+          onChange={(e) => { setLocalName(e.target.value); onNameChange?.(e.target.value) }}
           placeholder="Ad Soyad"
           className="rounded-md border-slate-300 text-sm p-2"
         />
         <input
-          value={tc}
-          onChange={(e) => setTc(e.target.value)}
+          value={effectiveTc}
+          onChange={(e) => { setLocalTc(e.target.value); onTcChange?.(e.target.value) }}
           placeholder="T.C. Kimlik No"
           maxLength={11}
           className="rounded-md border-slate-300 text-sm p-2"

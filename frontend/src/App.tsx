@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { useAuthStore } from '@/store/auth'
 import { DashboardLayout } from '@/layouts/DashboardLayout'
+import { FieldLayout } from '@/layouts/FieldLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { DashboardHome } from '@/pages/dashboard/DashboardHome'
 import { KanbanPage } from '@/pages/dashboard/KanbanPage'
@@ -17,6 +18,7 @@ import { FieldCollectPage } from '@/pages/field/FieldCollectPage'
 import { FieldQueuePage } from '@/pages/field/FieldQueuePage'
 import { ConstructionSitesPage } from '@/pages/dashboard/ConstructionSitesPage'
 import { EmployeesPage } from '@/pages/employees/EmployeesPage'
+import { VerifyPage } from '@/pages/reports/VerifyPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false } },
@@ -57,6 +59,7 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/verify/:reportNo" element={<VerifyPage />} />
           <Route element={<Protected><DashboardLayout /></Protected>}>
             <Route path="/dashboard" element={<Protected roles={['owner', 'manager', 'admin']}><DashboardHome /></Protected>} />
             <Route path="/kanban" element={<Protected roles={['owner', 'manager', 'lab_technician', 'qc_engineer', 'admin', 'field_tech', 'courier']}><KanbanPage /></Protected>} />
@@ -68,13 +71,15 @@ export function App() {
             <Route path="/hakedis" element={<Protected roles={['owner', 'manager', 'admin']}><HakedisPage /></Protected>} />
             <Route path="/reports" element={<Protected roles={['qc_engineer', 'owner', 'manager', 'admin']}><ReportsPage /></Protected>} />
             <Route path="/test/:id" element={<Protected roles={['lab_technician', 'qc_engineer', 'owner', 'manager', 'admin']}><TestEntryPage /></Protected>} />
+          </Route>
+          <Route element={<Protected><FieldLayout /></Protected>}>
             <Route path="/field" element={<Protected roles={['field_tech', 'courier', 'owner', 'manager', 'admin']}><FieldCollectPage /></Protected>} />
             <Route path="/field/queue" element={<Protected roles={['field_tech', 'courier', 'owner', 'manager', 'admin']}><FieldQueuePage /></Protected>} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-right" richColors aria-live="assertive" />
       </BrowserRouter>
     </QueryClientProvider>
   )

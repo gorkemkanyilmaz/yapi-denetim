@@ -247,12 +247,26 @@ export function HakedisPage() {
                             </button>
                           )}
 
-                          <a
-                            href={`/api/hakedis/${h.id}/export?token=${token}&tenant=${tenant?.id}`}
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/hakedis/${h.id}/export`, {
+                                  headers: { Authorization: `Bearer ${token}`, 'x-tenant-id': tenant?.id ?? '' },
+                                })
+                                if (!res.ok) throw new Error('İndirme başarısız')
+                                const blob = await res.blob()
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = `hakedis-${h.id}.xml`
+                                a.click()
+                                URL.revokeObjectURL(url)
+                              } catch { toast.error('XML indirilemedi') }
+                            }}
                             className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
                           >
                             <Download className="w-3.5 h-3.5" /> XML
-                          </a>
+                          </button>
                         </div>
                       </td>
                     </tr>

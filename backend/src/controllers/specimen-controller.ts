@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { pool } from '@/config/database.js'
+import type { JwtPayload } from '@/middleware/auth.js'
 import {
   calculateCompressiveStrength,
   calculatePacal,
@@ -34,9 +35,13 @@ export async function getSpecimen(req: Request, res: Response): Promise<void> {
 }
 
 export async function submitTestResult(req: Request, res: Response): Promise<void> {
-  if (!req.user || !req.tenantId) { res.status(401).json({ success: false }); return }
+  if (!(req.user as JwtPayload) || !req.tenantId) { res.status(401).json({ success: false }); return }
+  if (!['owner', 'manager', 'lab_technician', 'qc_engineer', 'admin'].includes((req.user as JwtPayload).role)) {
+    res.status(403).json({ success: false, message: 'Test sonucu girme yetkiniz yok' })
+    return
+  }
   const body = req.body as {
-    widthMm: number; heightMm: number; diameterMm?: number;
+    widthMm?: number; heightMm?: number; breadthMm?: number; diameterMm?: number;
     weightGr: number; failureLoadKn: number; equipmentId: string; notes?: string;
   }
   const specimenR = await pool.query<{
@@ -76,8 +81,16 @@ export async function submitTestResult(req: Request, res: Response): Promise<voi
     return
   }
 
+  // TS EN 12390-3: küp area = width × breadth, silindir area = π/4·d²
   const calc = calculateCompressiveStrength(
-    { widthMm: body.widthMm, heightMm: body.heightMm, diameterMm: body.diameterMm, weightGr: body.weightGr, failureLoadKn: body.failureLoadKn },
+    {
+      widthMm: body.widthMm ?? 0,
+      breadthMm: body.breadthMm ?? body.widthMm ?? 0,
+      heightMm: body.heightMm ?? 0,
+      diameterMm: body.diameterMm,
+      weightGr: body.weightGr,
+      failureLoadKn: body.failureLoadKn,
+    },
     specimen.concrete_class ?? 'C25/30',
   )
 
@@ -87,7 +100,7 @@ export async function submitTestResult(req: Request, res: Response): Promise<voi
     await client.query(
       `INSERT INTO test_results (specimen_id, equipment_id, tested_by, load_kn, area_mm2, strength_mpa, test_date, notes)
        VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7)`,
-      [req.params.id, body.equipmentId, req.user.userId, body.failureLoadKn, calc.areaMm2, calc.strengthMpa, body.notes ?? null],
+      [req.params.id, body.equipmentId, (req.user as JwtPayload).userId, body.failureLoadKn, calc.areaMm2, calc.strengthMpa, body.notes ?? null],
     )
     await client.query(
       `UPDATE specimens
@@ -99,11 +112,11 @@ export async function submitTestResult(req: Request, res: Response): Promise<voi
       [
         req.params.id, body.widthMm, body.heightMm, body.diameterMm ?? null, body.weightGr,
         calc.densityKgM3, body.failureLoadKn, calc.strengthMpa,
-        req.user.userId, body.equipmentId, SlaAlertLevel.NORMAL,
+        (req.user as JwtPayload).userId, body.equipmentId, SlaAlertLevel.NORMAL,
       ],
     )
     await client.query('COMMIT')
-    res.status(201).json({ success: true, data: { ...calc, passed: calc.passed } })
+    res.status(201).json({ success: true, data: calc })
   } catch (err) {
     await client.query('ROLLBACK')
     logger.error('submitTestResult failed', { err })

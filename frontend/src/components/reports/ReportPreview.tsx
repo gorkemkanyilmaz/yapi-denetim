@@ -101,11 +101,14 @@ export function ReportPreview({ sampleSetId }: { sampleSetId: string }) {
             const mean = subset.reduce((a, b) => a + Number(b.compressive_strength_mpa), 0) / subset.length
             const sd = Math.sqrt(subset.reduce((a, b) => a + (Number(b.compressive_strength_mpa) - mean) ** 2, 0) / subset.length)
             const fck = mean - 1.48 * sd
+            const concreteClass = set.concrete_class ?? set.site_concrete_class ?? 'C25/30'
+            const classMatch = concreteClass.match(/C\d+\s*\/\s*(\d+)/i)
+            const fckTarget = classMatch ? Number(classMatch[1]) : 30
             return (
               <div key={age} className="border border-slate-300 rounded p-2">
                 <div className="font-bold">{age} Günlük Paçal</div>
                 <div>Ortalama: {mean.toFixed(2)} MPa • s: {sd.toFixed(2)} • f_ck: {fck.toFixed(2)}</div>
-                <div className={fck >= 30 ? 'text-green-700' : 'text-red-700'}>{fck >= 30 ? 'TS EN 206 UYGUN' : 'UYGUN DEĞİL'}</div>
+                <div className={fck >= fckTarget ? 'text-green-700' : 'text-red-700'}>{fck >= fckTarget ? 'TS EN 206 UYGUN' : 'UYGUN DEĞİL'}</div>
               </div>
             )
           })}

@@ -16,7 +16,7 @@ export function TestEntryPage() {
   const equipmentList = (eq?.data ?? []) as Array<{ id: string; name: string; is_blocked: boolean; is_calibrated: boolean }>
 
   const [form, setForm] = useState({
-    widthMm: 150, heightMm: 300, diameterMm: 150, weightGr: 12500,
+    widthMm: 150, breadthMm: 150, heightMm: 300, diameterMm: 150, weightGr: 12500,
     failureLoadKn: 0, equipmentId: '', notes: '',
   })
   const [preview, setPreview] = useState<{ strength: number; area: number; density: number } | null>(null)
@@ -24,6 +24,7 @@ export function TestEntryPage() {
   const submit = useMutation({
     mutationFn: () => specimensApi.submitTestResult(id!, {
       ...form,
+      breadthMm: form.breadthMm || undefined,
       diameterMm: form.diameterMm || undefined,
     }),
     onSuccess: (r) => {
@@ -35,9 +36,9 @@ export function TestEntryPage() {
   })
 
   function calc() {
-    const area = form.diameterMm ? (Math.PI / 4) * form.diameterMm * form.diameterMm : form.widthMm * form.heightMm
+    const area = form.diameterMm ? (Math.PI / 4) * form.diameterMm * form.diameterMm : form.widthMm * (form.breadthMm || form.widthMm)
     const strength = (form.failureLoadKn * 1000) / area
-    const volume = (area * form.heightMm) / 1_000_000
+    const volume = (area * form.heightMm) / 1_000_000_000
     const density = (form.weightGr / 1000) / volume
     setPreview({ strength: Math.round(strength * 1000) / 1000, area: Math.round(area * 100) / 100, density: Math.round(density * 100) / 100 })
   }
@@ -59,6 +60,7 @@ export function TestEntryPage() {
 
       <div className="bg-white rounded-xl p-5 border border-slate-200 grid grid-cols-2 gap-3">
         <Field label="Genişlik (mm)" v={form.widthMm} onChange={(v) => setForm({ ...form, widthMm: Number(v) })} />
+        <Field label="En (mm, prizma)" v={form.breadthMm} onChange={(v) => setForm({ ...form, breadthMm: Number(v) })} />
         <Field label="Yükseklik (mm)" v={form.heightMm} onChange={(v) => setForm({ ...form, heightMm: Number(v) })} />
         <Field label="Çap (mm, silindir)" v={form.diameterMm} onChange={(v) => setForm({ ...form, diameterMm: Number(v) })} />
         <Field label="Ağırlık (gr)" v={form.weightGr} onChange={(v) => setForm({ ...form, weightGr: Number(v) })} />

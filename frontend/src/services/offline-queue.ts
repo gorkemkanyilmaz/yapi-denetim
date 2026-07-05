@@ -63,14 +63,14 @@ export async function flushQueue(token: string, tenantId: string): Promise<{ flu
   let failed = 0
   for (const op of ops) {
     try {
-      const res = await fetch(`/api/field-collections/sync`, {
-        method: 'POST',
+      const res = await fetch(op.endpoint, {
+        method: op.method,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'x-tenant-id': tenantId,
         },
-        body: JSON.stringify({ operations: [{ idempotencyKey: op.idempotencyKey, entityType: 'field_collection', payload: op.payload }] }),
+        body: JSON.stringify(op.payload),
       })
       if (!res.ok) throw new Error(`status_${res.status}`)
       if (op.id !== undefined) await removeFromQueue(op.id)

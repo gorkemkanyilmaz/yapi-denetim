@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import crypto from 'node:crypto'
 import { pool } from '@/config/database.js'
+import type { JwtPayload } from '@/middleware/auth.js'
 import { SampleStatus, MaterialType, StakeholderRole } from '@shared/types/enums'
 import {
   transitionSampleSet,
@@ -9,7 +10,10 @@ import {
 } from '@/services/state-machine/state-machine.js'
 import { validateGeofence } from '@/services/geofence/geofence.js'
 import { EbisValidationError } from '@/validators/ebis.js'
+import { recordAudit } from '@/utils/audit.js'
 import { logger } from '@/utils/logger.js'
+
+const YIF_RX = /^[A-Z0-9][A-Z0-9\-_/]{2,49}$/i
 
 function pageParams(req: Request): { page: number; perPage: number; offset: number } {
   const page = Math.max(1, Number(req.query.page ?? 1))
@@ -119,9 +123,32 @@ export async function createSampleSet(req: Request, res: Response): Promise<void
     assignedTo?: string
     unitPriceTry?: number
   }
-  if (!body.constructionSiteId || !body.materialType) {
-    res.status(400).json({ success: false, message: 'Eksik alan' })
+  if (!body.constructionSiteId || !body.materialType || !body.yifNo) {
+    res.status(400).json({ success: false, message: 'Eksik alan: constructionSiteId, materialType ve yifNo zorunlu' })
     return
+  }
+  if (!YIF_RX.test(body.yifNo)) {
+    res.status(400).json({ success: false, message: 'Geçersiz yifNo formatı (sadece harf, rakam, -, _, /)' })
+    return
+  }
+  // Cross-tenant FK validation
+  const siteCheck = await pool.query<{ id: string }>(
+    `SELECT id FROM construction_sites WHERE id = $1 AND tenant_id = $2`,
+    [body.constructionSiteId, req.tenantId]
+  )
+  if (!siteCheck.rows[0]) {
+    res.status(400).json({ success: false, message: 'Geçersiz şantiye (tenant uyumsuz)' })
+    return
+  }
+  if (body.assignedTo) {
+    const userCheck = await pool.query<{ id: string }>(
+      `SELECT id FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true`,
+      [body.assignedTo, req.tenantId]
+    )
+    if (!userCheck.rows[0]) {
+      res.status(400).json({ success: false, message: 'Geçersiz çalışan' })
+      return
+    }
   }
   const client = await pool.connect()
   try {
@@ -164,11 +191,11 @@ export async function createSampleSet(req: Request, res: Response): Promise<void
 }
 
 export async function transition(req: Request, res: Response): Promise<void> {
-  if (!req.user || !req.tenantId) {
+  if (!(req.user as JwtPayload) || !req.tenantId) {
     res.status(401).json({ success: false, message: 'Yetkilendirme gerekli' })
     return
   }
-  const user = req.user
+  const user = (req.user as JwtPayload)
   const tenantId = req.tenantId
   const sampleSetId = req.params.id as string
   const { toStatus, payload } = req.body as {
@@ -206,13 +233,15 @@ export async function transition(req: Request, res: Response): Promise<void> {
 
       if (!check.valid) {
         const providedToken = typeof payload.managerBypassToken === 'string' ? payload.managerBypassToken.trim() : ''
-        const bypassCheck = await pool.query(
-          `SELECT 1 FROM bypass_requests 
-           WHERE sample_set_id = $1 AND status = 'approved'
-             AND (token = $2 OR $2 = '')`,
-          [sampleSetId, providedToken]
-        )
-        const hasApprovedBypass = bypassCheck.rows[0] !== undefined
+        let hasApprovedBypass = false
+        if (providedToken) {
+          const bypassCheck = await pool.query(
+            `SELECT 1 FROM bypass_requests 
+             WHERE sample_set_id = $1 AND status = 'approved' AND token = $2`,
+            [sampleSetId, providedToken]
+          )
+          hasApprovedBypass = bypassCheck.rows[0] !== undefined
+        }
 
         if (!hasApprovedBypass) {
           const existingRequest = await pool.query<{ token: string }>(
@@ -276,6 +305,7 @@ export async function transition(req: Request, res: Response): Promise<void> {
 
 export async function addSignature(req: Request, res: Response): Promise<void> {
   if (!req.tenantId) { res.status(400).json({ success: false, message: 'Tenant gerekli' }); return }
+  if (!(req.user as JwtPayload)) { res.status(401).json({ success: false, message: 'Yetkilendirme gerekli' }); return }
   const { role, fullName, tcKimlikNo, signatureSvg } = req.body as {
     role: StakeholderRole; fullName: string; tcKimlikNo?: string; signatureSvg: string
   }
@@ -283,10 +313,26 @@ export async function addSignature(req: Request, res: Response): Promise<void> {
     res.status(400).json({ success: false, message: 'Eksik alan' })
     return
   }
+  if (signatureSvg === '<svg></svg>' || signatureSvg.trim() === '' || signatureSvg === 'data:image/svg+xml,') {
+    res.status(400).json({ success: false, message: 'Geçersiz imza (boş imza kabul edilmez)' })
+    return
+  }
   const own = await pool.query(`SELECT 1 FROM sample_sets WHERE id = $1 AND tenant_id = $2`, [req.params.id, req.tenantId])
   if (!own.rows[0]) {
     res.status(403).json({ success: false, message: 'Bu numune seti tenantınıza ait değil' })
     return
+  }
+  // Mevcut imza varsa ve imzalayan farklıysa, sadece owner/manager/admin override edebilir
+  const existing = await pool.query<{ full_name: string }>(
+    `SELECT full_name FROM stakeholder_signatures WHERE sample_set_id = $1 AND role = $2`,
+    [req.params.id, role]
+  )
+  if (existing.rows[0] && existing.rows[0].full_name !== fullName) {
+    const callerRole = (req.user as JwtPayload).role
+    if (!['owner', 'manager', 'admin'].includes(callerRole)) {
+      res.status(403).json({ success: false, message: 'Başkasının imzasını değiştirme yetkiniz yok' })
+      return
+    }
   }
   await pool.query(
     `INSERT INTO stakeholder_signatures (sample_set_id, role, full_name, tc_kimlik_no, signature_svg)
@@ -347,7 +393,7 @@ export async function listConstructionSites(req: Request, res: Response): Promis
 }
 
 export async function acceptSampleSet(req: Request, res: Response): Promise<void> {
-  if (!req.tenantId || !req.user) { res.status(401).json({ success: false, message: 'Yetkisiz erişim' }); return }
+  if (!req.tenantId || !(req.user as JwtPayload)) { res.status(401).json({ success: false, message: 'Yetkisiz erişim' }); return }
   
   const setRes = await pool.query<{ assigned_to: string }>(
     `SELECT assigned_to FROM sample_sets WHERE id = $1 AND tenant_id = $2`,
@@ -359,15 +405,20 @@ export async function acceptSampleSet(req: Request, res: Response): Promise<void
     return
   }
 
-  if (sampleSet.assigned_to && sampleSet.assigned_to !== req.user.userId && !['owner', 'manager', 'admin'].includes(req.user.role)) {
+  if (sampleSet.assigned_to && sampleSet.assigned_to !== (req.user as JwtPayload).userId && !['owner', 'manager', 'admin'].includes((req.user as JwtPayload).role)) {
     res.status(403).json({ success: false, message: 'Bu görev size atanmamış' })
     return
   }
 
-  await pool.query(
-    `UPDATE sample_sets SET is_accepted = TRUE, accepted_at = NOW(), updated_at = NOW() WHERE id = $1`,
-    [req.params.id]
+  const r = await pool.query(
+    `UPDATE sample_sets SET is_accepted = TRUE, accepted_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+    [req.params.id, req.tenantId]
   )
+  if (r.rowCount === 0) {
+    res.status(404).json({ success: false, message: 'Görev bulunamadı' })
+    return
+  }
   res.json({ success: true, message: 'Görev başarıyla kabul edildi' })
 }
 
@@ -390,6 +441,18 @@ export async function createConstructionSite(req: Request, res: Response): Promi
     res.status(400).json({ success: false, message: 'Ad, YİF No ve Adres alanları zorunludur' })
     return
   }
+  if (!YIF_RX.test(yifNo)) {
+    res.status(400).json({ success: false, message: 'Geçersiz YİF No formatı' })
+    return
+  }
+  if (latitude !== undefined && (Number(latitude) < -90 || Number(latitude) > 90)) {
+    res.status(400).json({ success: false, message: 'Enlem -90..90 arası olmalı' })
+    return
+  }
+  if (longitude !== undefined && (Number(longitude) < -180 || Number(longitude) > 180)) {
+    res.status(400).json({ success: false, message: 'Boylam -180..180 arası olmalı' })
+    return
+  }
 
   const lat = latitude !== undefined && latitude !== null ? Number(latitude) : 39.9208
   const lng = longitude !== undefined && longitude !== null ? Number(longitude) : 32.8540
@@ -402,6 +465,14 @@ export async function createConstructionSite(req: Request, res: Response): Promi
     [req.tenantId, name, yifNo, address, lat, lng, contractorName || null, inspectionFirm || null, readyMixSupplier || null, concreteClass || null, santiyeSorumlusuCep || null]
   )
 
+  const client = await pool.connect()
+  try {
+    await recordAudit(client, {
+      tenantId: req.tenantId, userId: (req.user as JwtPayload).userId, entityType: 'construction_site', entityId: r.rows[0].id,
+      action: 'INSERT', fieldName: 'name', newValue: name,
+      ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] ?? '',
+    })
+  } finally { client.release() }
   res.status(201).json({ success: true, data: r.rows[0] })
 }
 
@@ -453,6 +524,18 @@ export async function updateConstructionSite(req: Request, res: Response): Promi
 
   if (!name || !yifNo || !address) {
     res.status(400).json({ success: false, message: 'Ad, YİF No ve Adres alanları zorunludur' })
+    return
+  }
+  if (!YIF_RX.test(yifNo)) {
+    res.status(400).json({ success: false, message: 'Geçersiz YİF No formatı' })
+    return
+  }
+  if (latitude !== undefined && (Number(latitude) < -90 || Number(latitude) > 90)) {
+    res.status(400).json({ success: false, message: 'Enlem -90..90 arası olmalı' })
+    return
+  }
+  if (longitude !== undefined && (Number(longitude) < -180 || Number(longitude) > 180)) {
+    res.status(400).json({ success: false, message: 'Boylam -180..180 arası olmalı' })
     return
   }
 

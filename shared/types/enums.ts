@@ -58,7 +58,7 @@ export const VALID_TRANSITIONS: Record<SampleStatus, SampleStatus[]> = {
   [SampleStatus.CREATED]: [SampleStatus.COLLECTED],
   [SampleStatus.COLLECTED]: [SampleStatus.IN_TRANSIT],
   [SampleStatus.IN_TRANSIT]: [SampleStatus.RECEIVED],
-  [SampleStatus.RECEIVED]: [SampleStatus.IN_CURING],
+  [SampleStatus.RECEIVED]: [SampleStatus.IN_CURING, SampleStatus.SCHEDULED_FOR_TEST],
   [SampleStatus.IN_CURING]: [SampleStatus.SCHEDULED_FOR_TEST],
   [SampleStatus.SCHEDULED_FOR_TEST]: [SampleStatus.TESTED],
   [SampleStatus.TESTED]: [SampleStatus.APPROVED],

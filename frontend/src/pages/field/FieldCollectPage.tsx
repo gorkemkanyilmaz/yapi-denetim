@@ -6,6 +6,7 @@ import { samplesApi, type SampleSet } from '@/services/samples-api'
 import { enqueueOp } from '@/services/offline-queue'
 import { useAuthStore } from '@/store/auth'
 import { toast } from 'sonner'
+import { SignaturePadComponent } from '@/components/field/SignaturePad'
 
 interface GpsFix { lat: number; lng: number; accuracyM: number }
 
@@ -25,6 +26,11 @@ export function FieldCollectPage() {
     denetci_muhendis: { name: '', tc: '' },
     santiye_sefi: { name: '', tc: '' },
     beton_tesisi_yetkilisi: { name: '', tc: '' }
+  })
+  const [signatureSvgs, setSignatureSvgs] = useState<Record<string, string>>({
+    denetci_muhendis: '',
+    santiye_sefi: '',
+    beton_tesisi_yetkilisi: '',
   })
   const [oobBlocked, setOobBlocked] = useState<{ distanceM: number; thresholdM: number; token?: string } | null>(null)
   const [managerBypassToken, setManagerBypassToken] = useState('')
@@ -79,12 +85,13 @@ export function FieldCollectPage() {
       // Save stakeholders in DB
       for (const role of ['denetci_muhendis', 'santiye_sefi', 'beton_tesisi_yetkilisi'] as const) {
         const sh = stakeholders[role]
-        if (sh && sh.name) {
+        const svg = signatureSvgs[role]
+        if (sh && sh.name && svg) {
           await samplesApi.addSignature(selectedSet.id, {
             role,
             fullName: sh.name,
             tcKimlikNo: sh.tc || undefined,
-            signatureSvg: '<svg></svg>',
+            signatureSvg: svg,
           })
         }
       }
@@ -119,6 +126,11 @@ export function FieldCollectPage() {
         denetci_muhendis: { name: '', tc: '' },
         santiye_sefi: { name: '', tc: '' },
         beton_tesisi_yetkilisi: { name: '', tc: '' }
+      })
+      setSignatureSvgs({
+        denetci_muhendis: '',
+        santiye_sefi: '',
+        beton_tesisi_yetkilisi: '',
       })
     },
     onError: (e: { response?: { status?: number; data?: { code?: string; geofence?: { distanceM: number; thresholdM: number; token?: string } } } }) => {
@@ -194,14 +206,12 @@ export function FieldCollectPage() {
           gps,
           photos: photoDataUrl ? [photoDataUrl] : [],
           ocrText: ocrResult?.raw_text || 'Manuel Giriş',
-          ebisProtocolNo: protocolNo || undefined,
-          ebisFisNo: fisNo || undefined,
-          concreteClass: concreteClass || undefined,
         },
       })
       for (const role of ['denetci_muhendis', 'santiye_sefi', 'beton_tesisi_yetkilisi'] as const) {
         const sh = stakeholders[role]
-        if (sh && sh.name) {
+        const svg = signatureSvgs[role]
+        if (sh && sh.name && svg) {
           await enqueueOp({
             idempotencyKey: uuid(),
             endpoint: `/samples/${selectedSet.id}/signatures`,
@@ -210,11 +220,25 @@ export function FieldCollectPage() {
               role,
               fullName: sh.name,
               tcKimlikNo: sh.tc || undefined,
-              signatureSvg: '<svg></svg>',
+              signatureSvg: svg,
             }
           })
         }
       }
+      await enqueueOp({
+        idempotencyKey: uuid(),
+        endpoint: `/samples/${selectedSet.id}/status`,
+        method: 'PATCH',
+        payload: {
+          toStatus: 'collected',
+          payload: {
+            gps: { lat: gps.lat, lng: gps.lng, accuracyM: gps.accuracyM },
+            ebisProtocolNo: protocolNo || undefined,
+            ebisFisNo: fisNo || undefined,
+            concreteClass: concreteClass || undefined,
+          },
+        },
+      })
       toast.success('Çevrimdışı kuyruğa eklendi (geçiş çevrimiçi iken işlenecek)')
       return
     }
@@ -444,51 +468,22 @@ export function FieldCollectPage() {
 
       <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200">
         <h3 className="font-bold text-slate-900 text-sm border-b pb-2">
-          Saha Yetkilileri Bilgileri (Ad-Soyad / TC)
+          Saha Yetkilileri — İmza & Bilgi
         </h3>
-        
+
         <div className="space-y-3.5 divide-y divide-slate-100">
-          {(['denetci_muhendis', 'santiye_sefi', 'beton_tesisi_yetkilisi'] as const).map((role, idx) => {
-            const roleLabels: Record<string, string> = {
-              denetci_muhendis: 'Denetçi Mühendis',
-              santiye_sefi: 'Şantiye Şefi',
-              beton_tesisi_yetkilisi: 'Beton Tesisi Yetkilisi'
-            }
-            return (
-              <div key={role} className={idx > 0 ? "pt-3.5 space-y-2" : "space-y-2"}>
-                <div className="text-xs font-bold text-slate-700">{roleLabels[role]}</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block">
-                    <span className="text-[11px] font-medium text-slate-500">Ad Soyad</span>
-                    <input
-                      type="text"
-                      value={stakeholders[role]?.name ?? ''}
-                      onChange={(e) => setStakeholders(s => ({
-                        ...s,
-                        [role]: { name: e.target.value, tc: s[role]?.tc ?? '' }
-                      }))}
-                      placeholder="Ad Soyad"
-                      className="mt-1 w-full rounded-md border-slate-300 text-xs p-2 bg-slate-50 focus:bg-white"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] font-medium text-slate-500">T.C. Kimlik No</span>
-                    <input
-                      type="text"
-                      maxLength={11}
-                      value={stakeholders[role]?.tc ?? ''}
-                      onChange={(e) => setStakeholders(s => ({
-                        ...s,
-                        [role]: { name: s[role]?.name ?? '', tc: e.target.value }
-                      }))}
-                      placeholder="11 haneli TC"
-                      className="mt-1 w-full rounded-md border-slate-300 text-xs p-2 bg-slate-50 focus:bg-white font-mono"
-                    />
-                  </label>
-                </div>
-              </div>
-            )
-          })}
+          {(['denetci_muhendis', 'santiye_sefi', 'beton_tesisi_yetkilisi'] as const).map((role) => (
+            <div key={role} className="pt-3.5 first:pt-0">
+              <SignaturePadComponent
+                role={role}
+                name={stakeholders[role]?.name ?? ''}
+                tc={stakeholders[role]?.tc ?? ''}
+                onNameChange={(v) => setStakeholders(s => ({ ...s, [role]: { name: v, tc: s[role]?.tc ?? '' } }))}
+                onTcChange={(v) => setStakeholders(s => ({ ...s, [role]: { name: s[role]?.name ?? '', tc: v } }))}
+                onChange={(svg) => setSignatureSvgs(s => ({ ...s, [role]: svg }))}
+              />
+            </div>
+          ))}
         </div>
       </div>
 

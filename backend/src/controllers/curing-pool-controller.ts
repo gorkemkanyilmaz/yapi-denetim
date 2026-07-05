@@ -1,6 +1,10 @@
 import type { Request, Response } from 'express'
 import { pool } from '@/config/database.js'
 
+function canManagePools(role: string): boolean {
+  return ['owner', 'manager', 'lab_technician', 'qc_engineer', 'admin'].includes(role)
+}
+
 export async function listPools(req: Request, res: Response): Promise<void> {
   if (!req.tenantId) { res.status(400).json({ success: false }); return }
   const r = await pool.query(
@@ -36,20 +40,47 @@ export async function getZones(req: Request, res: Response): Promise<void> {
 
 export async function assignZone(req: Request, res: Response): Promise<void> {
   if (!req.tenantId) { res.status(400).json({ success: false }); return }
+  if (!canManagePools(req.user?.role ?? '')) {
+    res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' })
+    return
+  }
   const { sampleSetId } = req.body as { sampleSetId: string }
+  if (!sampleSetId) {
+    res.status(400).json({ success: false, message: 'sampleSetId zorunlu' })
+    return
+  }
+  // Cross-tenant: sample set bu tenant'a mı ait?
+  const ss = await pool.query<{ id: string }>(
+    `SELECT id FROM sample_sets WHERE id = $1 AND tenant_id = $2`,
+    [sampleSetId, req.tenantId]
+  )
+  if (!ss.rows[0]) {
+    res.status(400).json({ success: false, message: 'Geçersiz numune seti (tenant uyumsuz)' })
+    return
+  }
+  // Race-safe: yalnızca boş zone'a ata
   const r = await pool.query(
     `UPDATE curing_pool_zones z
         SET is_occupied = TRUE, current_sample_set_id = $1
        FROM curing_pools cp
       WHERE z.id = $2 AND z.curing_pool_id = cp.id AND cp.tenant_id = $3
+        AND z.is_occupied = FALSE
       RETURNING z.*`,
     [sampleSetId, req.params.zoneId, req.tenantId],
   )
+  if (r.rowCount === 0) {
+    res.status(409).json({ success: false, message: 'Bu bölge zaten dolu veya bulunamadı' })
+    return
+  }
   res.json({ success: true, data: r.rows[0] })
 }
 
 export async function releaseZone(req: Request, res: Response): Promise<void> {
   if (!req.tenantId) { res.status(400).json({ success: false }); return }
+  if (!canManagePools(req.user?.role ?? '')) {
+    res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' })
+    return
+  }
   await pool.query(
     `UPDATE curing_pool_zones z
         SET is_occupied = FALSE, current_sample_set_id = NULL

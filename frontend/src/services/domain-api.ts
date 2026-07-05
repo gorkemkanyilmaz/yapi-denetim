@@ -6,7 +6,7 @@ export const specimensApi = {
   slaViolations: () => api.get('/specimens/sla-violations').then((r) => r.data),
   get: (id: string) => api.get(`/specimens/${id}`).then((r) => r.data),
   submitTestResult: (id: string, body: {
-    widthMm: number; heightMm: number; diameterMm?: number; weightGr: number;
+    widthMm: number; breadthMm?: number; heightMm: number; diameterMm?: number; weightGr: number;
     failureLoadKn: number; equipmentId: string; notes?: string;
   }) => api.post(`/specimens/${id}/test-result`, body).then((r) => r.data),
   pacal: (sampleSetId: string) => api.get(`/specimens/by-sample-set/${sampleSetId}/pacal`).then((r) => r.data),
@@ -49,6 +49,8 @@ export const reportsApi = {
   getPdfUrl: (id: string) => `/api/reports/${id}/pdf`,
   batchGenerate: (sampleSetIds: string[]) =>
     api.post('/reports/batch-generate', { sampleSetIds }).then((r) => r.data),
+  verify: (reportNumber: string) =>
+    api.get(`/reports/verify/${encodeURIComponent(reportNumber)}`).then((r) => r.data),
 }
 
 export const dashboardApi = {

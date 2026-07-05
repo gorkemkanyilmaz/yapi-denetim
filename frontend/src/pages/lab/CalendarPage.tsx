@@ -10,8 +10,10 @@ export function CalendarPage() {
   const items = (cal?.data ?? []) as Array<{ id: string; specimen_no: number; target_test_date: string; target_age_days: number; sla_alert: 'normal' | 'warning' | 'critical' | 'blocked'; ebis_protocol_no: string | null; yif_no: string; concrete_class: string | null; site_name: string; status: string }>
   const viols = (violations?.data ?? []) as Array<{ id: string; sla_alert: string; site_name: string; ebis_protocol_no: string | null; yif_no: string; target_age_days: number; specimen_no: number }>
 
-  const today = new Date().toISOString().slice(0, 10)
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`
 
   return (
     <div className="space-y-6">
@@ -61,7 +63,9 @@ export function CalendarPage() {
               <div className="text-xs text-slate-600">{it.target_age_days} günlük • {formatDate(it.target_test_date)}</div>
               <div className="text-xs text-slate-500 mt-1">{it.site_name}</div>
               <div className="mt-2">
-                <span className={cn('inline-block text-xs px-2 py-0.5 rounded border', slaColor(it.sla_alert))}>{it.sla_alert}</span>
+                <span className={cn('inline-block text-xs px-2 py-0.5 rounded border', slaColor(it.sla_alert))}>
+                  {it.sla_alert === 'critical' ? 'Kritik' : it.sla_alert === 'warning' ? 'Uyarı' : it.sla_alert === 'blocked' ? 'Engelli' : 'Normal'}
+                </span>
               </div>
             </Link>
           )

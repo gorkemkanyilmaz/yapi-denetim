@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import rateLimit from 'express-rate-limit'
 import { pool } from './config/database.js'
 import { verifyToken } from './middleware/auth.js'
+import type { JwtPayload } from '../types/express-override.js'
 import { tenantMiddleware } from './middleware/tenant.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { authRouter } from './routes/auth.js'
@@ -25,22 +26,66 @@ dotenv.config()
 const app = express()
 const PORT = Number(process.env.PORT ?? 3000)
 
-app.use(helmet())
-app.use(cors({ origin: process.env.FRONTEND_URL ?? 'http://localhost:5173', credentials: true }))
-app.use(express.json({ limit: '20mb' }))
-app.use(express.urlencoded({ extended: true }))
+// Vercel/Oracle Cloud gibi reverse proxy arkasında doğru client IP için
+app.set('trust proxy', 1)
+
+// CORS allowlist: birden fazla frontend domain destekle (prod + preview + custom)
+const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173'
+const ALLOWED_ORIGINS = FRONTEND_URL.split(',').map((s) => s.trim()).filter(Boolean)
+// Vercel preview branch pattern'leri: yapi-denetim-*-git-*.vercel.app
+const VERCEL_PREVIEW_RX = /^https:\/\/yapi-denetim[a-z0-9-]*-git-[a-z0-9-]+\.vercel\.app$/
+
+function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void): void {
+  if (!origin) return cb(null, true)
+  if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
+  if (VERCEL_PREVIEW_RX.test(origin)) return cb(null, true)
+  cb(new Error(`CORS: ${origin} not allowed`), false)
+}
+
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}))
+app.use(cors({ origin: corsOrigin, credentials: true }))
+app.use(express.json({ limit: '1mb' }))
+app.use(express.urlencoded({ extended: true, limit: '1mb' }))
 app.use(morgan('combined'))
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }))
+
+// Genel rate limit
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+}))
+
+// Auth: sıkı per-IP limitler
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Çok fazla giriş denemesi. 15 dakika sonra tekrar deneyin.' },
+})
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Çok fazla kayıt denemesi. 1 saat sonra tekrar deneyin.' },
+})
 
 app.use((req, _res, next) => {
   const h = req.headers.authorization
   if (h && h.startsWith('Bearer ')) {
-    try { req.user = verifyToken(h.slice(7)) } catch { /* invalid token ignored; route-level authenticate handles 401 */ }
+    try { (req.user as JwtPayload) = verifyToken(h.slice(7)) } catch { /* invalid token ignored; route-level authenticate handles 401 */ }
   }
   next()
 })
 app.use(tenantMiddleware)
 
+app.use('/api/auth/login', loginLimiter)
+app.use('/api/auth/register', registerLimiter)
 app.use('/api/auth', authRouter)
 app.use('/api/samples', sampleRouter)
 app.use('/api/specimens', specimenRouter)

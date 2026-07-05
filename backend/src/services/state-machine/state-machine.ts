@@ -221,6 +221,25 @@ export async function transitionSampleSet(
       if (!input.payload?.curingPoolZoneId) {
         throw new SlaViolationError('missing_zone', 'Kür havuzu bölgesi seçilmedi')
       }
+      // Cross-tenant: zone bu tenant'a mı ait?
+      const zoneCheck = await client.query<{ id: string }>(
+        `SELECT z.id FROM curing_pool_zones z
+          JOIN curing_pools cp ON cp.id = z.curing_pool_id
+         WHERE z.id = $1 AND cp.tenant_id = $2`,
+        [input.payload.curingPoolZoneId, ctx.tenantId],
+      )
+      if (!zoneCheck.rows[0]) {
+        throw new SlaViolationError('invalid_zone', 'Geçersiz kür havuzu bölgesi (tenant uyumsuz)')
+      }
+      // Race-safe: yalnızca boş zone'a ata
+      const zoneUpdate = await client.query(
+        `UPDATE curing_pool_zones SET is_occupied = TRUE, current_sample_set_id = $1
+         WHERE id = $2 AND is_occupied = FALSE`,
+        [input.sampleSetId, input.payload.curingPoolZoneId],
+      )
+      if (zoneUpdate.rowCount === 0) {
+        throw new SlaViolationError('zone_occupied', 'Bu bölge zaten dolu')
+      }
       setClauses.push(
         `curing_pool_zone_id = $${i++}`,
         `curing_started_at = NOW()`,
@@ -253,14 +272,6 @@ export async function transitionSampleSet(
       values,
     )
 
-    if (input.toStatus === SampleStatus.IN_CURING && input.payload?.curingPoolZoneId) {
-      await client.query(
-        `UPDATE curing_pool_zones
-           SET is_occupied = TRUE, current_sample_set_id = $2
-         WHERE id = $1`,
-        [input.payload.curingPoolZoneId, input.sampleSetId],
-      )
-    }
     if (fromStatus === SampleStatus.SCHEDULED_FOR_TEST && row.id) {
       await client.query(
         `UPDATE curing_pool_zones

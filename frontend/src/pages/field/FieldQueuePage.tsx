@@ -44,7 +44,15 @@ export function FieldQueuePage() {
               <div className="text-xs text-slate-500">{new Date(op.createdAt).toLocaleString('tr-TR')} • {op.attempts} deneme</div>
               {op.lastError && <div className="text-xs text-red-600 mt-1">Hata: {op.lastError}</div>}
             </div>
-            <button onClick={async () => { if (op.id) await removeFromQueue(op.id); void refetch() }} className="text-red-600">
+            <button
+              onClick={async () => {
+                if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return
+                if (op.id) await removeFromQueue(op.id)
+                void refetch()
+              }}
+              className="p-2 text-red-600 hover:bg-red-50 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Kuyruktan sil"
+            >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>

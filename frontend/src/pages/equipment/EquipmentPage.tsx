@@ -12,8 +12,9 @@ export function EquipmentPage() {
       <h1 className="text-2xl font-bold flex items-center gap-2"><Wrench className="w-6 h-6" /> Cihazlar & Kalibrasyon</h1>
       <div className="grid gap-3">
         {eq.map((e) => {
-          const exp = new Date(e.calibration_expiry_date)
-          const days = Math.floor((exp.getTime() - Date.now()) / 86400000)
+          const exp = new Date(e.calibration_expiry_date + 'T00:00:00')
+          const today = new Date(); today.setHours(0, 0, 0, 0)
+          const days = Math.floor((exp.getTime() - today.getTime()) / 86400000)
           const state = e.is_blocked ? 'blocked' : days < 0 ? 'expired' : days < 30 ? 'expiring' : 'ok'
           const styles = {
             ok: 'border-green-300 bg-green-50',

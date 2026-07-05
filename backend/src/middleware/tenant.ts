@@ -1,22 +1,14 @@
 import type { Request, Response, NextFunction } from 'express'
 import { pool } from '@/config/database.js'
-
-declare global {
-  namespace Express {
-    interface Request {
-      tenantId?: string
-      tenantExpiresAt?: string | null
-    }
-  }
-}
+import type { JwtPayload } from '../../types/express-override.js'
 
 export async function tenantMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (req.user) {
-    req.tenantId = req.user.tenantId
+  if ((req.user as JwtPayload)) {
+    req.tenantId = (req.user as JwtPayload).tenantId
     try {
       const r = await pool.query<{ expires_at: string | null; is_active: boolean }>(
         'SELECT expires_at, is_active FROM tenants WHERE id = $1',
-        [req.user.tenantId],
+        [(req.user as JwtPayload).tenantId],
       )
       const row = r.rows[0]
       if (row) {
@@ -40,7 +32,13 @@ export async function tenantMiddleware(req: Request, res: Response, next: NextFu
         }
       }
     } catch (err) {
-      // DB hatası → sessizce geç, sonraki middleware'ler halledebilir
+      // DB hatası → fail-closed (audit/billing enforcement atlanmasın)
+      res.status(503).json({
+        success: false,
+        code: 'TENANT_LOOKUP_FAILED',
+        message: 'Tenant doğrulaması geçici olarak başarısız, lütfen tekrar deneyin',
+      })
+      return
     }
   }
   next()

@@ -455,9 +455,11 @@ export function KanbanPage() {
                       )}
 
                       {/* Quick Action Buttons */}
-                      {!isFieldUser && (() => {
+                      {(() => {
                         const action = getNextAction(s, col)
                         if (!action) return null
+                        // Field users: only show for tasks assigned to them and accepted
+                        if (isFieldUser && (!isAssignedToMe || !isAccepted)) return null
                         return (
                           <button
                             type="button"
@@ -476,12 +478,12 @@ export function KanbanPage() {
                         )
                       })()}
 
-                      {col === 'scheduled_for_test' && !isFieldUser && (
+                      {col === 'scheduled_for_test' && (!isFieldUser || (isAssignedToMe && isAccepted)) && (
                         <Link
-                          to={`/lab`}
+                          to={`/test/${s.id}`}
                           className="mt-2 sm:mt-3 block text-center w-full py-1.5 px-2 sm:px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] sm:text-xs font-semibold transition-all shadow-sm active:scale-95"
                         >
-                          🔬 Kırım Testi
+                          Kırım Testi
                         </Link>
                       )}
                     </div>

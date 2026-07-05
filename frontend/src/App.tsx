@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { useAuthStore } from '@/store/auth'
 import { DashboardLayout } from '@/layouts/DashboardLayout'
-import { FieldLayout } from '@/layouts/FieldLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { DashboardHome } from '@/pages/dashboard/DashboardHome'
 import { KanbanPage } from '@/pages/dashboard/KanbanPage'
@@ -71,8 +70,6 @@ export function App() {
             <Route path="/hakedis" element={<Protected roles={['owner', 'manager', 'admin']}><HakedisPage /></Protected>} />
             <Route path="/reports" element={<Protected roles={['qc_engineer', 'owner', 'manager', 'admin']}><ReportsPage /></Protected>} />
             <Route path="/test/:id" element={<Protected roles={['lab_technician', 'qc_engineer', 'owner', 'manager', 'admin']}><TestEntryPage /></Protected>} />
-          </Route>
-          <Route element={<Protected><FieldLayout /></Protected>}>
             <Route path="/field" element={<Protected roles={['field_tech', 'courier', 'owner', 'manager', 'admin']}><FieldCollectPage /></Protected>} />
             <Route path="/field/queue" element={<Protected roles={['field_tech', 'courier', 'owner', 'manager', 'admin']}><FieldQueuePage /></Protected>} />
           </Route>

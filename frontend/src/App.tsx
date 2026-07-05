@@ -13,6 +13,7 @@ import { CuringPoolsPage } from '@/pages/pools/CuringPoolsPage'
 import { EquipmentPage } from '@/pages/equipment/EquipmentPage'
 import { HakedisPage } from '@/pages/hakedis/HakedisPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
+import { FieldReportsPage } from '@/pages/reports/FieldReportsPage'
 import { FieldCollectPage } from '@/pages/field/FieldCollectPage'
 import { FieldQueuePage } from '@/pages/field/FieldQueuePage'
 import { ConstructionSitesPage } from '@/pages/dashboard/ConstructionSitesPage'
@@ -69,6 +70,7 @@ export function App() {
             <Route path="/equipment" element={<Protected roles={['lab_technician', 'owner', 'manager', 'admin']}><EquipmentPage /></Protected>} />
             <Route path="/hakedis" element={<Protected roles={['owner', 'manager', 'admin']}><HakedisPage /></Protected>} />
             <Route path="/reports" element={<Protected roles={['qc_engineer', 'owner', 'manager', 'admin']}><ReportsPage /></Protected>} />
+            <Route path="/reports/field" element={<Protected roles={['qc_engineer', 'owner', 'manager', 'admin']}><FieldReportsPage /></Protected>} />
             <Route path="/test/:id" element={<Protected roles={['lab_technician', 'qc_engineer', 'owner', 'manager', 'admin']}><TestEntryPage /></Protected>} />
             <Route path="/field" element={<Protected roles={['field_tech', 'courier', 'owner', 'manager', 'admin']}><FieldCollectPage /></Protected>} />
             <Route path="/field/queue" element={<Protected roles={['field_tech', 'courier', 'owner', 'manager', 'admin']}><FieldQueuePage /></Protected>} />

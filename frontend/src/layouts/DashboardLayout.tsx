@@ -22,6 +22,7 @@ export function DashboardLayout() {
     { to: '/hakedis', label: 'Hakediş', roles: ['owner', 'manager', 'admin'] },
     { to: '/field', label: 'Saha', roles: ['field_tech', 'courier', 'owner', 'manager', 'admin'] },
     { to: '/reports', label: 'Raporlar', roles: ['qc_engineer', 'owner', 'manager', 'admin'] },
+    { to: '/reports/field', label: 'Saha Raporları', roles: ['qc_engineer', 'owner', 'manager', 'admin'] },
   ]
 
   const visible = links.filter((l) => l.roles.includes(user?.role ?? ''))

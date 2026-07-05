@@ -1,8 +1,14 @@
-import { useState } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { samplesApi } from '@/services/samples-api'
 import { toast } from 'sonner'
-import { Plus, MapPin, Edit, Phone } from 'lucide-react'
+import { Plus, MapPin, Edit, Phone, Search, LocateFixed } from 'lucide-react'
+
+interface GeocodingResult {
+  display_name: string
+  lat: string
+  lon: string
+}
 
 export function ConstructionSitesPage() {
   const qc = useQueryClient()
@@ -20,6 +26,39 @@ export function ConstructionSitesPage() {
   const [readyMixSupplier, setReadyMixSupplier] = useState('')
   const [concreteClass, setConcreteClass] = useState('C30/37')
   const [santiyeSorumlusuCep, setSantiyeSorumlusuCep] = useState('')
+
+  // Geocoding state
+  const [geoQuery, setGeoQuery] = useState('')
+  const [geoResults, setGeoResults] = useState<GeocodingResult[]>([])
+  const [geoLoading, setGeoLoading] = useState(false)
+  const [showGeoResults, setShowGeoResults] = useState(false)
+  const geoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const searchGeocoding = useCallback((q: string) => {
+    if (geoTimeoutRef.current) clearTimeout(geoTimeoutRef.current)
+    if (q.length < 3) { setGeoResults([]); setShowGeoResults(false); return }
+    setGeoLoading(true)
+    geoTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=tr&limit=5&accept-language=tr`, {
+          headers: { 'User-Agent': 'YapiDenetim/1.0' },
+        })
+        const data = await res.json()
+        setGeoResults(data)
+        setShowGeoResults(data.length > 0)
+      } catch { setGeoResults([]) }
+      finally { setGeoLoading(false) }
+    }, 400)
+  }, [])
+
+  const selectGeoResult = (r: GeocodingResult) => {
+    setLat(r.lat)
+    setLng(r.lon)
+    setAddress(r.display_name)
+    setGeoQuery('')
+    setGeoResults([])
+    setShowGeoResults(false)
+  }
 
   // Query
   const { data: sitesData, isLoading } = useQuery({
@@ -273,6 +312,41 @@ export function ConstructionSitesPage() {
                 />
               </label>
 
+              {/* Address Search with Geocoding */}
+              <div className="col-span-2 relative">
+                <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                  <LocateFixed className="w-3 h-3" /> Adres Ara (Otomatik Koordinat)
+                </span>
+                <div className="relative mt-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={geoQuery}
+                    onChange={(e) => { setGeoQuery(e.target.value); searchGeocoding(e.target.value) }}
+                    onFocus={() => geoResults.length > 0 && setShowGeoResults(true)}
+                    onBlur={() => setTimeout(() => setShowGeoResults(false), 200)}
+                    placeholder="Adres veya konum adı yazın (ör: Kızılay, Ankara)"
+                    className="mt-1 w-full rounded-lg border-slate-300 text-sm p-2.5 pl-9 bg-blue-50 focus:bg-white focus:border-blue-400 font-mono"
+                  />
+                  {geoLoading && <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-blue-500">Aranıyor...</div>}
+                </div>
+                {showGeoResults && geoResults.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {geoResults.map((r, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onMouseDown={() => selectGeoResult(r)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 text-xs"
+                      >
+                        <div className="font-medium text-slate-800 line-clamp-1">{r.display_name}</div>
+                        <div className="text-slate-500 font-mono text-[10px] mt-0.5">{Number(r.lat).toFixed(5)}, {Number(r.lon).toFixed(5)}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <label className="block">
                 <span className="text-xs font-semibold text-slate-600">Enlem (Latitude)</span>
                 <input
@@ -292,6 +366,18 @@ export function ConstructionSitesPage() {
                   className="mt-1 w-full rounded-lg border-slate-300 text-sm p-2.5 bg-slate-50 focus:bg-white font-mono"
                 />
               </label>
+
+              {/* Mini Map Preview */}
+              {lat && lng && !isNaN(Number(lat)) && !isNaN(Number(lng)) && (
+                <div className="col-span-2 rounded-lg overflow-hidden border border-slate-200 h-32">
+                  <img
+                    src={`https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=15&size=600x300&markers=${lat},${lng},red-pushpin`}
+                    alt="Konum Önizleme"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  />
+                </div>
+              )}
 
               <label className="block">
                 <span className="text-xs font-semibold text-slate-600">Yüklenici Müteahhit</span>

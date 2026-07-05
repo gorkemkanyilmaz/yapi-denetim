@@ -183,12 +183,18 @@ export async function createSampleSet(req: Request, res: Response): Promise<void
     // Otomatik hakediş oluştur (unit_price_try > 0 ise)
     if (body.unitPriceTry && body.unitPriceTry > 0) {
       const today = new Date().toISOString().slice(0, 10)
+      // Beton: 6 numune (3×7g + 3×28g), diğerleri: 3 numune
+      const specimenCount = body.materialType === MaterialType.CONCRETE ? 6 : 3
+      const amount = specimenCount * body.unitPriceTry
+      const vatRate = 20
+      const vatAmount = (amount * vatRate) / 100
+      const totalAmount = amount + vatAmount
       await client.query(
         `INSERT INTO hakedis
            (tenant_id, construction_site_id, period_start, period_end, total_samples, completed_samples,
             unit_price_try, amount_try, vat_rate, vat_amount_try, total_amount_try, status)
-         VALUES ($1, $2, $3, $4, 1, 0, $5, 0, 20, 0, 0, 'draft')`,
-        [req.tenantId, body.constructionSiteId, today, today, body.unitPriceTry],
+         VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $10, 'draft')`,
+        [req.tenantId, body.constructionSiteId, today, today, specimenCount, body.unitPriceTry, amount, vatRate, vatAmount, totalAmount],
       )
     }
     await client.query('COMMIT')
